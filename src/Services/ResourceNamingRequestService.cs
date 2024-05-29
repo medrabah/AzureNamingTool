@@ -13,6 +13,9 @@ using static System.Net.Mime.MediaTypeNames;
 
 namespace AzureNamingTool.Services
 {
+    /// <summary>
+    /// Service for managing Resource Naming Requests
+    /// </summary>
     public class ResourceNamingRequestService
     {
         /// <summary>
@@ -32,7 +35,7 @@ namespace AzureNamingTool.Services
             {
                 bool valid = true;
                 bool ignoredelimeter = false;
-                List<string[]> lstComponents = new();
+                List<string[]> lstComponents = [];
                 bool previousdelimiterappliedafter = true;
 
                 // Get the specified resource type
@@ -51,9 +54,8 @@ namespace AzureNamingTool.Services
                 }
 
                 // Get the components
-                ServiceResponse serviceresponse = new();
-                serviceresponse = await ResourceComponentService.GetItems(false);
-                var currentResourceComponents = serviceresponse.ResponseObject;
+                serviceResponse = await ResourceComponentService.GetItems(false);
+                var currentResourceComponents = serviceResponse.ResponseObject;
                 dynamic d = request;
 
                 string name = "";
@@ -82,7 +84,7 @@ namespace AzureNamingTool.Services
                                 }
                                 else
                                 {
-                                    value = prop.GetType().GetProperty("ShortName").GetValue(prop, null).ToLower();
+                                    value = prop.GetType().GetProperty("ShortName").GetValue(prop, null);
                                 }
 
                                 // Check if the delimeter is already ignored
@@ -129,17 +131,17 @@ namespace AzureNamingTool.Services
                                 // Add property to aray for indivudal component validation
                                 if (component.Name == "ResourceType")
                                 {
-                                    lstComponents.Add(new string[] { component.Name, prop.Resource + " (" + value + ")" });
+                                    lstComponents.Add([component.Name, prop.Resource + " (" + value + ")"]);
                                 }
                                 else
                                 {
                                     if (component.Name == "ResourceInstance")
                                     {
-                                        lstComponents.Add(new string[] { component.Name, prop });
+                                        lstComponents.Add([component.Name, prop]);
                                     }
                                     else
                                     {
-                                        lstComponents.Add(new string[] { component.Name, prop.Name + " (" + value + ")" });
+                                        lstComponents.Add([component.Name, prop.Name + " (" + value + ")"]);
                                     }
                                 }
                             }
@@ -209,12 +211,12 @@ namespace AzureNamingTool.Services
                     GeneratedName generatedName = new()
                     {
                         CreatedOn = DateTime.Now,
-                        ResourceName = name.ToLower(),
+                        ResourceName = name,
                         Components = lstComponents
                     };
                     await GeneratedNamesService.PostItem(generatedName);
                     response.Success = true;
-                    response.ResourceName = name.ToLower();
+                    response.ResourceName = name;
                     response.Message = sbMessage.ToString();
                     return response;
                 }
@@ -234,7 +236,7 @@ namespace AzureNamingTool.Services
         }
 
         /// <summary>
-        /// This function is used to generate a name by providing each componetn and the short name value. The function will validate the values to ensure they match the current configuration. 
+        /// This function is used to generate a name by providing each component and the short name value. The function will validate the values to ensure they match the current configuration. 
         /// </summary>
         /// <param name="request"></param>
         /// <returns>ResourceNameResponse - Response of name generation</returns>
@@ -249,14 +251,13 @@ namespace AzureNamingTool.Services
             {
                 bool valid = true;
                 bool ignoredelimeter = false;
-                List<string[]> lstComponents = new();
+                List<string[]> lstComponents = [];
                 ServiceResponse serviceResponse = new();
                 ResourceDelimiter resourceDelimiter = new();
                 ResourceType resourceType = new();
                 string name = "";
                 StringBuilder sbMessage = new();
                 bool previousdelimiterappliedafter = true;
-                bool applyDelimiter = true;
 
                 // Get the current delimiter
                 serviceResponse = await ResourceDelimiterService.GetCurrentItem();
@@ -337,7 +338,7 @@ namespace AzureNamingTool.Services
                     // Make sure the passed custom component names are normalized
                     if (GeneralHelper.IsNotNull(request.CustomComponents))
                     {
-                        Dictionary<string, string> newComponents = new();
+                        Dictionary<string, string> newComponents = [];
                         foreach (var cc in request.CustomComponents)
                         {
                             string value = cc.Value;
@@ -513,7 +514,7 @@ namespace AzureNamingTool.Services
                                                         // Add property to array for individual component validation
                                                         if (!resourceType.Exclude.ToLower().Split(',').Contains(normalizedcomponentname))
                                                         {
-                                                            lstComponents.Add(new string[] { component.Name, value });
+                                                            lstComponents.Add([component.Name, value]);
                                                         }
                                                     }
                                                 }
@@ -599,7 +600,7 @@ namespace AzureNamingTool.Services
                                                                                         name += componentvalue;
 
                                                                                         // Add property to array for individual component validation
-                                                                                        lstComponents.Add(new string[] { component.Name, componentvalue });
+                                                                                        lstComponents.Add([component.Name, componentvalue]);
                                                                                     }
                                                                                 }
                                                                             }
@@ -679,7 +680,7 @@ namespace AzureNamingTool.Services
                                                                 name += componentvalue;
 
                                                                 // Add property to array for individual component validation
-                                                                lstComponents.Add(new string[] { component.Name, componentvalue });
+                                                                lstComponents.Add([component.Name, componentvalue]);
                                                             }
                                                             else
                                                             {
@@ -786,31 +787,33 @@ namespace AzureNamingTool.Services
                         // Check if the request contains Resource Instance is a selected componoent
                         if (!String.IsNullOrEmpty(GeneralHelper.GetPropertyValue(request, "ResourceInstance")?.ToString()))
                         {
-                            // CHeck if the name should be auto-incremented
+                            // Check if the name should be auto-incremented
                             if (Convert.ToBoolean(ConfigurationHelper.GetAppSetting("AutoIncrementResourceInstance")))
                             {
                                 // Check if there was a ResourceInstance value supplied
                                 if (GeneralHelper.IsNotNull(GeneralHelper.GetPropertyValue(request, "ResourceInstance")))
                                 {
                                     // Attempt to auto-increement the instance 
+                                    // Set the original name value
+                                    string originalname = name;
                                     // Get the instance value
                                     string originalinstance = GeneralHelper.GetPropertyValue(request, "ResourceInstance")?.ToString() ?? "";
-                                    // Increase the instance by 1
-                                    string newinstance = (Convert.ToInt32(originalinstance) + 1).ToString();
-                                    // Make sure the instance pattern matches the entered values (leading zeros)
-                                    while (newinstance.Length < originalinstance.Length)
+                                    // Determine the next instance value
+                                    string newinstance = String.Empty;
+                                    int i = 1;
+                                    while (await ConfigurationHelper.CheckIfGeneratedNameExists(name))
                                     {
-                                        newinstance = "0" + newinstance;
+                                        newinstance = (Convert.ToInt32(originalinstance) + i).ToString();
+                                        // Make sure the instance pattern matches the entered values (leading zeros)
+                                        while (newinstance.Length < originalinstance.Length)
+                                        {
+                                            newinstance = "0" + newinstance;
+                                        }
+                                        // Replace the new instance in the original name
+                                        name = originalname.Replace(originalinstance, newinstance);
+                                        // Increase the counter
+                                        i += 1;
                                     }
-                                    // Update the generated name with the new instance
-                                    string newname = name.Replace(originalinstance, newinstance);
-                                    // Check to make sure the new name is unique
-                                    while (await ConfigurationHelper.CheckIfGeneratedNameExists(newname))
-                                    {
-                                        newinstance = (Convert.ToInt32(newinstance) + 1).ToString();
-                                        newname = name.Replace(originalinstance, newinstance);
-                                    }
-                                    name = newname;
                                     sbMessage.Append("The resource instance has been auto-incremented to the next value.");
                                     sbMessage.Append(Environment.NewLine);
                                 }
@@ -848,7 +851,7 @@ namespace AzureNamingTool.Services
                         GeneratedName generatedName = new()
                         {
                             CreatedOn = DateTime.Now,
-                            ResourceName = name.ToLower(),
+                            ResourceName = name,
                             Components = lstComponents,
                             ResourceTypeName = resourceType.Resource,
                             User = request.CreatedBy,
@@ -865,7 +868,7 @@ namespace AzureNamingTool.Services
                         if (responseGenerateName.Success)
                         {
                             resourceNameResponse.Success = true;
-                            resourceNameResponse.ResourceName = name.ToLower();
+                            resourceNameResponse.ResourceName = name;
                             resourceNameResponse.Message = sbMessage.ToString();
                             resourceNameResponse.ResourceNameDetails = generatedName;
 
